@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   build-linux:
-    runs-on: ubuntu-20.04 # Versão recomendada para compatibilidade de binários
+    runs-on: ubuntu-latest # Versão recomendada para compatibilidade de binários
     steps:
       - name: Checkout
         uses: actions/checkout@v4
