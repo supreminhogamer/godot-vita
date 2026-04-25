@@ -18,15 +18,30 @@ jobs:
         run: python -m pip install scons
 
       - name: Instalar VitaSDK
+        env:
+          # Injeta o token oficial do GitHub Actions para não sofrer Rate Limit
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Baixa o Autobuild mais recente do VitaSDK oficial
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/vitasdk/autobuilds/releases/latest | grep browser_download_url | grep "linux" | cut -d '"' -f 4)
+          echo "Consultando a API do GitHub com autenticação..."
+          
+          # Busca todos os releases e extrai a primeira URL do SDK compilado para Linux
+          DOWNLOAD_URL=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/vitasdk/autobuilds/releases | \
+            grep "browser_download_url" | grep "vitasdk-x86_64-linux" | \
+            head -n 1 | cut -d '"' -f 4)
+          
+          if [ -z "$DOWNLOAD_URL" ]; then
+             echo "Erro: Não foi possível obter a URL do VitaSDK."
+             exit 1
+          fi
+          
+          echo "Iniciando download do SDK em: $DOWNLOAD_URL"
           wget -O vitasdk.tar.bz2 "$DOWNLOAD_URL"
           
-          # Extrai o SDK para a pasta do sistema
+          echo "Extraindo SDK..."
           sudo tar -xjvf vitasdk.tar.bz2 -C /usr/local
           
-          # Configura as variáveis de ambiente necessárias para o compilador do Vita
+          # Configura as variáveis de ambiente permanentemente para as próximas etapas
           echo "VITASDK=/usr/local/vitasdk" >> $GITHUB_ENV
           echo "/usr/local/vitasdk/bin" >> $GITHUB_PATH
 
@@ -42,7 +57,6 @@ jobs:
         run: |
           mkdir templates
           
-          # Tenta copiar o binário gerado (pode terminar em .arm ou .elf dependendo do commit)
           cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf
           cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf
           
