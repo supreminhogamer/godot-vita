@@ -6,12 +6,6 @@ jobs:
   build-web-templates:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Godot Source
-        uses: actions/checkout@v4
-        with:
-          repository: godotengine/godot
-          ref: 3.x # Puxa o código-fonte em desenvolvimento contínuo (sua "3.7.dev")
-
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
@@ -31,17 +25,34 @@ jobs:
 
       - name: Compilar Template HTML5 (Release)
         run: |
-          # target=release é o template otimizado (sem debug)
+          # target=release
           # tools=no diz para NÃO buildar o editor
           scons platform=javascript tools=no target=release -j$(nproc)
 
       - name: Compilar Template HTML5 (Debug)
         run: |
-          # target=release_debug é o template usado durante o desenvolvimento/testes
+          # Necessário para o zip de debug existir na hora de empacotar
           scons platform=javascript tools=no target=release_debug -j$(nproc)
 
-      - name: Upload dos Templates
+      - name: Empacotar no formato .tpz
+        run: |
+          # 1. Cria a pasta exigida pela Godot
+          mkdir templates
+          
+          # 2. Copia os zips gerados e renomeia para o padrão do editor
+          # Nota: A Godot 3.x espera exatamente esses nomes para o HTML5
+          cp bin/godot.javascript.opt.zip templates/webassembly_release.zip
+          cp bin/godot.javascript.opt.debug.zip templates/webassembly_debug.zip
+          
+          # 3. Cria o arquivo version.txt (Essencial para o editor aceitar)
+          # Você pode alterar o "3.7.dev" para a versão exata que você está usando
+          echo "3.7.dev" > templates/version.txt
+          
+          # 4. Zipa a pasta inteira e salva com a extensão .tpz
+          zip -r html5_templates.tpz templates/
+
+      - name: Upload do Template TPZ
         uses: actions/upload-artifact@v4
         with:
-          name: godot-html5-templates
-          path: bin/godot.javascript.*.zip
+          name: godot-html5-tpz
+          path: html5_templates.tpz
