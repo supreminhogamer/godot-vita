@@ -1,0 +1,47 @@
+name: Build Godot 3.x HTML5 Templates
+on: 
+  workflow_dispatch: # Permite rodar a Action manualmente clicando num botão no GitHub
+
+jobs:
+  build-web-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Godot Source
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: 3.x # Puxa o código-fonte em desenvolvimento contínuo (sua "3.7.dev")
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Instalar SCons
+        run: python -m pip install scons
+
+      - name: Configurar Emscripten (emsdk)
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.39' # Versão altamente recomendada/estável para a Godot 3.x
+          actions-cache-folder: 'emsdk-cache'
+
+      - name: Verificar Emscripten
+        run: emcc -v
+
+      - name: Compilar Template HTML5 (Release)
+        run: |
+          # target=release é o template otimizado (sem debug)
+          # tools=no diz para NÃO buildar o editor
+          scons platform=javascript tools=no target=release -j$(nproc)
+
+      - name: Compilar Template HTML5 (Debug)
+        run: |
+          # target=release_debug é o template usado durante o desenvolvimento/testes
+          scons platform=javascript tools=no target=release_debug -j$(nproc)
+
+      - name: Upload dos Templates
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-html5-templates
+          path: bin/godot.javascript.*.zip
