@@ -3,7 +3,6 @@ on:
   workflow_dispatch:
 
 env:
-  # Adicionamos -Drestrict= aqui para evitar o erro no netdb.h
   SCONSFLAGS: verbose=yes warnings=all werror=no debug_symbols=no CXXFLAGS="-Drestrict="
   VITASDK: /usr/local/vitasdk
 
@@ -24,46 +23,45 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install cmake libarchive-tools fakeroot zip -y
-          
           git clone https://github.com/vitasdk/vdpm
           cd vdpm
           ./bootstrap-vitasdk.sh
           ./install-all.sh
-          
           export PATH=$VITASDK/bin:$PATH
-          
-          # Instala bibliotecas vitais
           ./vdpm vita-rss-libdl
-          
-          # Instala PVR_PSP2
           git clone https://github.com/isage/vita-packages-extra /tmp/vita-packages-extra
           cd /tmp/vita-packages-extra/pvr_psp2
           $VITASDK/bin/vita-makepkg
           $VITASDK/bin/vdpm *.tar.xz
-          
           echo "VITASDK=$VITASDK" >> $GITHUB_ENV
           echo "$VITASDK/bin" >> $GITHUB_PATH
 
       - name: Compilar Template (Release)
         run: |
-          # Passamos as flags de ambiente para o SCons
           scons platform=vita tools=no target=release ${{ env.SCONSFLAGS }} -j$(nproc)
+
+      - name: Limpar temp-build entre versões
+        run: rm -rf temp-build/
 
       - name: Compilar Template (Debug)
         run: |
           scons platform=vita tools=no target=release_debug ${{ env.SCONSFLAGS }} -j$(nproc)
 
       - name: Empacotar no formato .tpz
+        if: always() # Roda mesmo que a compilação de debug tenha falhado
         run: |
           mkdir -p templates
-          cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf || true
-          cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf || true
+          # O seu log mostra que os arquivos estão indo para temp-build/
+          # Tentamos pegar de bin/ (padrão godot) ou de temp-build/ (seu fork)
+          cp temp-build/godot.vita.opt.32 templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf || true
+          cp temp-build/godot.vita.opt.debug.32 templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf || true
           
           echo "3.7.dev" > templates/version.txt
           zip -r godot_vita_templates.tpz templates/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
+        if: always() # Garante que você receba o arquivo mesmo se o debug falhar
         with:
           name: godot-vita-tpz
           path: godot_vita_templates.tpz
