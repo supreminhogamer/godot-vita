@@ -1,6 +1,6 @@
 name: 🎮 PSVita Builds
 on:
-  workflow_call:
+  workflow_dispatch:
 
 # Global Settings
 env:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   vita-template:
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-latest"
     name: Template (target=release, tools=no)
 
     steps:
