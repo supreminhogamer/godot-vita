@@ -1,21 +1,40 @@
-name: "godot-export"
+name: Build Godot Engine 3.5
 on: [push, pull_request]
 
 jobs:
-  export_game:
-    runs-on: ubuntu-latest
-    name: Export Game
+  build-linux:
+    runs-on: ubuntu-20.04 # Versão recomendada para compatibilidade de binários
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
-      - name: Build do Godot 3.5
-        uses: firebelley/godot-export@v5.2.1
+      - name: Instalar Dependências
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            scons \
+            pkg-config \
+            libx11-dev \
+            libxcursor-dev \
+            libxinerama-dev \
+            libgl1-mesa-dev \
+            libglu-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libxi-dev \
+            libxrandr-dev
+
+      - name: Compilar Engine (Editor)
+        run: |
+          # platform=x11 (para Godot 3.5 o Linux é identificado como x11)
+          # tools=yes (builda o Editor; use no para export templates)
+          # target=release_debug (otimizado mas com símbolos de debug)
+          scons platform=x11 tools=yes target=release_debug -j$(nproc)
+
+      - name: Upload Binário
+        uses: actions/upload-artifact@v4
         with:
-          # Configurações do Godot
-          godot_executable_download_url: https://downloads.tuxfamily.org/godotengine/3.5.3/Godot_v3.5.3-stable_linux_headless.64.zip
-          godot_export_templates_download_url: https://downloads.tuxfamily.org/godotengine/3.5.3/Godot_v3.5.3-stable_export_templates.tpz
-          relative_project_path: ./
-          archive_output: true
+          name: godot-linux-binary
+          path: bin/godot.x11.opt.tools.64
