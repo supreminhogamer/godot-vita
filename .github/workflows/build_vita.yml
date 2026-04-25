@@ -3,7 +3,8 @@ on:
   workflow_dispatch:
 
 env:
-  SCONSFLAGS: verbose=yes warnings=all werror=no debug_symbols=no
+  # Adicionamos -Drestrict= aqui para evitar o erro no netdb.h
+  SCONSFLAGS: verbose=yes warnings=all werror=no debug_symbols=no CXXFLAGS="-Drestrict="
   VITASDK: /usr/local/vitasdk
 
 jobs:
@@ -21,36 +22,31 @@ jobs:
 
       - name: Setup VitaSDK via VDPM
         run: |
-          # Instala dependências do sistema necessárias para o VDPM
           sudo apt-get update
           sudo apt-get install cmake libarchive-tools fakeroot zip -y
           
-          # Clona e instala o VitaSDK oficial
           git clone https://github.com/vitasdk/vdpm
           cd vdpm
           ./bootstrap-vitasdk.sh
           ./install-all.sh
           
-          # Adiciona ao PATH para os próximos comandos
           export PATH=$VITASDK/bin:$PATH
           
-          # Instala a libdl (resolve o erro dlfcn.h)
+          # Instala bibliotecas vitais
           ./vdpm vita-rss-libdl
           
-          # Instala o PVR_PSP2 (Gráficos)
+          # Instala PVR_PSP2
           git clone https://github.com/isage/vita-packages-extra /tmp/vita-packages-extra
           cd /tmp/vita-packages-extra/pvr_psp2
-          # O comando vita-makepkg compila o pacote para o Vita
           $VITASDK/bin/vita-makepkg
-          # O vdpm instala o pacote .tar.xz gerado no SDK
           $VITASDK/bin/vdpm *.tar.xz
           
-          # Exporta caminhos para o ambiente do GitHub Actions
           echo "VITASDK=$VITASDK" >> $GITHUB_ENV
           echo "$VITASDK/bin" >> $GITHUB_PATH
 
       - name: Compilar Template (Release)
         run: |
+          # Passamos as flags de ambiente para o SCons
           scons platform=vita tools=no target=release ${{ env.SCONSFLAGS }} -j$(nproc)
 
       - name: Compilar Template (Debug)
@@ -60,7 +56,6 @@ jobs:
       - name: Empacotar no formato .tpz
         run: |
           mkdir -p templates
-          # O binário pode sair como .elf ou .arm, pegamos o que existir
           cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf || true
           cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf || true
           
