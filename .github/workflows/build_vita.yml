@@ -21,7 +21,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Busca a URL do VitaSDK autenticado para evitar Rate Limit
           DOWNLOAD_URL=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             https://api.github.com/repos/vitasdk/autobuilds/releases | \
             grep "browser_download_url" | grep "vitasdk-x86_64-linux" | \
@@ -36,12 +35,46 @@ jobs:
       - name: Instalar Dependências (PVR_PSP2 e dlcompat)
         run: |
           # 1. Instalar Vita-dlcompat (Resolve o erro do dlfcn.h)
-          git clone https://github.com/vitasdk/vita-dlcompat.git /tmp/dlcompat
-          cd /tmp/dlcompat
+          # Baixando via ZIP para evitar erro de autenticação do Git
+          wget -O dlcompat.zip https://github.com/vitasdk/vita-dlcompat/archive/refs/heads/master.zip
+          unzip dlcompat.zip -d /tmp
+          cd /tmp/vita-dlcompat-master
+          
           export PATH=$PATH:/usr/local/vitasdk/bin
-          make
+          # Usamos o compilador específico do Vita explicitamente
+          make CC=arm-vita-eabi-gcc AR=arm-vita-eabi-ar
+          
           sudo cp libdl.a /usr/local/vitasdk/arm-vita-eabi/lib/
           sudo cp include/dlfcn.h /usr/local/vitasdk/arm-vita-eabi/include/
           cd $GITHUB_WORKSPACE
 
           # 2. Instalar PVR_PSP2 (Headers e Stubs Gráficos)
+          wget -O pvr_psp2.zip https://github.com/GrapheneCt/PVR_PSP2/archive/refs/heads/master.zip
+          unzip pvr_psp2.zip -d /tmp
+          sudo cp -r /tmp/PVR_PSP2-master/include/* /usr/local/vitasdk/arm-vita-eabi/include/
+          
+          wget -O vitasdk_stubs.zip "https://github.com/GrapheneCt/PVR_PSP2/releases/latest/download/vitasdk_stubs.zip"
+          unzip vitasdk_stubs.zip -d /tmp/pvr_stubs
+          find /tmp/pvr_stubs -name "*.a" -exec sudo cp {} /usr/local/vitasdk/arm-vita-eabi/lib/ \;
+
+      - name: Compilar Template Vita (Release)
+        run: |
+          scons platform=vita tools=no target=release -j$(nproc)
+
+      - name: Compilar Template Vita (Debug)
+        run: |
+          scons platform=vita tools=no target=release_debug -j$(nproc)
+
+      - name: Empacotar no formato .tpz
+        run: |
+          mkdir templates
+          cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf
+          cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf
+          echo "3.7.dev" > templates/version.txt
+          zip -r godot_vita_templates.tpz templates/
+
+      - name: Upload do Template TPZ
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-vita-tpz
+          path: godot_vita_templates.tpz
