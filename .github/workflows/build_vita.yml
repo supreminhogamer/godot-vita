@@ -1,8 +1,9 @@
-name: 🎮 PSVita Custom Build
+name: 🎮 PSVita Release Build (Fast)
 on:
   workflow_dispatch:
 
 env:
+  # Flags otimizadas para velocidade e compatibilidade
   SCONSFLAGS: verbose=yes warnings=all werror=no debug_symbols=no CXXFLAGS="-Drestrict="
   VITASDK: /usr/local/vitasdk
 
@@ -21,47 +22,57 @@ jobs:
 
       - name: Setup VitaSDK via VDPM
         run: |
+          # Instala dependências de build do sistema
           sudo apt-get update
           sudo apt-get install cmake libarchive-tools fakeroot zip -y
+          
+          # Setup do SDK (Esta parte é necessária e demora um pouco)
           git clone https://github.com/vitasdk/vdpm
           cd vdpm
           ./bootstrap-vitasdk.sh
           ./install-all.sh
           export PATH=$VITASDK/bin:$PATH
+          
+          # Instala libdl e PVR_PSP2 (Essencial para o seu fork)
           ./vdpm vita-rss-libdl
           git clone https://github.com/isage/vita-packages-extra /tmp/vita-packages-extra
           cd /tmp/vita-packages-extra/pvr_psp2
           $VITASDK/bin/vita-makepkg
           $VITASDK/bin/vdpm *.tar.xz
+          
           echo "VITASDK=$VITASDK" >> $GITHUB_ENV
           echo "$VITASDK/bin" >> $GITHUB_PATH
 
       - name: Compilar Template (Release)
         run: |
+          # Compila apenas o alvo de Release
           scons platform=vita tools=no target=release ${{ env.SCONSFLAGS }} -j$(nproc)
-
-      - name: Limpar temp-build entre versões
-        run: rm -rf temp-build/
-
-      - name: Compilar Template (Debug)
-        run: |
-          scons platform=vita tools=no target=release_debug ${{ env.SCONSFLAGS }} -j$(nproc)
+          
+          # Entra na pasta gerada e cria o zip interno que a Godot exige
+          cd temp-build/vita_release
+          zip -r ../../vita_release.zip *
+          cd ../../
 
       - name: Empacotar no formato .tpz
-        if: always() # Roda mesmo que a compilação de debug tenha falhado
         run: |
           mkdir -p templates
-          # O seu log mostra que os arquivos estão indo para temp-build/
-          # Tentamos pegar de bin/ (padrão godot) ou de temp-build/ (seu fork)
-          cp temp-build/godot.vita.opt.32 templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf || true
-          cp temp-build/godot.vita.opt.debug.32 templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf || true
           
+          # Move o zip de release para a pasta de templates
+          if [ -f "vita_release.zip" ]; then
+            mv vita_release.zip templates/
+          else
+            echo "Erro: vita_release.zip não foi gerado!"
+            exit 1
+          fi
+          
+          # Cria o arquivo de versão (ajuste se sua versão for diferente)
           echo "3.7.dev" > templates/version.txt
-          zip -r godot_vita_templates.tpz templates/
+          
+          # Gera o arquivo .tpz final
+          zip -r godot_vita_release_only.tpz templates/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
-        if: always() # Garante que você receba o arquivo mesmo se o debug falhar
         with:
-          name: godot-vita-tpz
-          path: godot_vita_templates.tpz
+          name: godot-vita-release-template
+          path: godot_vita_release_only.tpz
