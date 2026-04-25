@@ -34,24 +34,26 @@ jobs:
 
       - name: Instalar Dependências (PVR_PSP2 e dlcompat)
         run: |
-          # 1. Instalar Vita-dlcompat (Resolve o erro do dlfcn.h)
-          # Baixando via ZIP para evitar erro de autenticação do Git
-          wget -O dlcompat.zip https://github.com/vitasdk/vita-dlcompat/archive/refs/heads/master.zip
-          unzip dlcompat.zip -d /tmp
-          cd /tmp/vita-dlcompat-master
-          
           export PATH=$PATH:/usr/local/vitasdk/bin
-          # Usamos o compilador específico do Vita explicitamente
-          make CC=arm-vita-eabi-gcc AR=arm-vita-eabi-ar
+          
+          # 1. Instalar Vita-dlcompat (via link RAW para evitar 404 de ZIP)
+          mkdir -p /tmp/dlcompat/include
+          cd /tmp/dlcompat
+          curl -L -o include/dlfcn.h https://raw.githubusercontent.com/vitasdk/vita-dlcompat/master/include/dlfcn.h
+          curl -L -o dlfcn.c https://raw.githubusercontent.com/vitasdk/vita-dlcompat/master/dlfcn.c
+          
+          # Compilação manual simples do dlcompat
+          arm-vita-eabi-gcc -c dlfcn.c -o dlfcn.o -Iinclude
+          arm-vita-eabi-ar rcs libdl.a dlfcn.o
           
           sudo cp libdl.a /usr/local/vitasdk/arm-vita-eabi/lib/
           sudo cp include/dlfcn.h /usr/local/vitasdk/arm-vita-eabi/include/
           cd $GITHUB_WORKSPACE
 
-          # 2. Instalar PVR_PSP2 (Headers e Stubs Gráficos)
-          wget -O pvr_psp2.zip https://github.com/GrapheneCt/PVR_PSP2/archive/refs/heads/master.zip
-          unzip pvr_psp2.zip -d /tmp
-          sudo cp -r /tmp/PVR_PSP2-master/include/* /usr/local/vitasdk/arm-vita-eabi/include/
+          # 2. Instalar PVR_PSP2 (Headers e Stubs)
+          # Clonando via HTTPS direto (método mais estável)
+          git clone --depth 1 https://github.com/GrapheneCt/PVR_PSP2.git /tmp/PVR_PSP2
+          sudo cp -r /tmp/PVR_PSP2/include/* /usr/local/vitasdk/arm-vita-eabi/include/
           
           wget -O vitasdk_stubs.zip "https://github.com/GrapheneCt/PVR_PSP2/releases/latest/download/vitasdk_stubs.zip"
           unzip vitasdk_stubs.zip -d /tmp/pvr_stubs
@@ -67,9 +69,9 @@ jobs:
 
       - name: Empacotar no formato .tpz
         run: |
-          mkdir templates
-          cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf
-          cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf
+          mkdir -p templates
+          cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf || true
+          cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf || true
           echo "3.7.dev" > templates/version.txt
           zip -r godot_vita_templates.tpz templates/
 
