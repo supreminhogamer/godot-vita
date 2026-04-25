@@ -21,6 +21,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Busca a URL do VitaSDK autenticado para evitar Rate Limit
           DOWNLOAD_URL=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             https://api.github.com/repos/vitasdk/autobuilds/releases | \
             grep "browser_download_url" | grep "vitasdk-x86_64-linux" | \
@@ -32,41 +33,15 @@ jobs:
           echo "VITASDK=/usr/local/vitasdk" >> $GITHUB_ENV
           echo "/usr/local/vitasdk/bin" >> $GITHUB_PATH
 
-      - name: Instalar PVR_PSP2 (Dependências Gráficas do Vita)
+      - name: Instalar Dependências (PVR_PSP2 e dlcompat)
         run: |
-          echo "Clonando repositório para obter os Headers EGL/GLES..."
-          git clone https://github.com/GrapheneCt/PVR_PSP2.git /tmp/PVR_PSP2
-          sudo cp -r /tmp/PVR_PSP2/include/* $VITASDK/arm-vita-eabi/include/
-          
-          echo "Baixando arquivos de bibliotecas dinâmicas (.a)..."
-          # Usa um link direto para a última versão oficial sem consumir API
-          wget -O vitasdk_stubs.zip "https://github.com/GrapheneCt/PVR_PSP2/releases/latest/download/vitasdk_stubs.zip"
-          unzip vitasdk_stubs.zip -d /tmp/pvr_stubs
-          
-          echo "Instalando stubs no SDK..."
-          # Busca todos os arquivos .a extraídos e copia pro VitaSDK
-          find /tmp/pvr_stubs -name "*.a" -exec sudo cp {} $VITASDK/arm-vita-eabi/lib/ \;
+          # 1. Instalar Vita-dlcompat (Resolve o erro do dlfcn.h)
+          git clone https://github.com/vitasdk/vita-dlcompat.git /tmp/dlcompat
+          cd /tmp/dlcompat
+          export PATH=$PATH:/usr/local/vitasdk/bin
+          make
+          sudo cp libdl.a /usr/local/vitasdk/arm-vita-eabi/lib/
+          sudo cp include/dlfcn.h /usr/local/vitasdk/arm-vita-eabi/include/
+          cd $GITHUB_WORKSPACE
 
-      - name: Compilar Template Vita (Release)
-        run: |
-          scons platform=vita tools=no target=release -j$(nproc)
-
-      - name: Compilar Template Vita (Debug)
-        run: |
-          scons platform=vita tools=no target=release_debug -j$(nproc)
-
-      - name: Empacotar no formato .tpz
-        run: |
-          mkdir templates
-          
-          cp bin/godot.vita.opt.arm templates/vita_release.elf || cp bin/godot.vita.opt.elf templates/vita_release.elf
-          cp bin/godot.vita.opt.debug.arm templates/vita_debug.elf || cp bin/godot.vita.opt.debug.elf templates/vita_debug.elf
-          
-          echo "3.7.dev" > templates/version.txt
-          zip -r godot_vita_templates.tpz templates/
-
-      - name: Upload do Template TPZ
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-vita-tpz
-          path: godot_vita_templates.tpz
+          # 2. Instalar PVR_PSP2 (Headers e Stubs Gráficos)
