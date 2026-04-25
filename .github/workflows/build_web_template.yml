@@ -1,11 +1,14 @@
 name: Build Godot 3.x HTML5 Templates
 on: 
-  workflow_dispatch: # Permite rodar a Action manualmente clicando num botão no GitHub
+  workflow_dispatch:
 
 jobs:
   build-web-templates:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Godot Source
+        uses: actions/checkout@v4
+
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
@@ -17,7 +20,7 @@ jobs:
       - name: Configurar Emscripten (emsdk)
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: '3.1.39' # Versão altamente recomendada/estável para a Godot 3.x
+          version: '3.1.39'
           actions-cache-folder: 'emsdk-cache'
 
       - name: Verificar Emscripten
@@ -25,30 +28,18 @@ jobs:
 
       - name: Compilar Template HTML5 (Release)
         run: |
-          # target=release
-          # tools=no diz para NÃO buildar o editor
           scons platform=javascript tools=no target=release -j$(nproc)
 
       - name: Compilar Template HTML5 (Debug)
         run: |
-          # Necessário para o zip de debug existir na hora de empacotar
           scons platform=javascript tools=no target=release_debug -j$(nproc)
 
       - name: Empacotar no formato .tpz
         run: |
-          # 1. Cria a pasta exigida pela Godot
           mkdir templates
-          
-          # 2. Copia os zips gerados e renomeia para o padrão do editor
-          # Nota: A Godot 3.x espera exatamente esses nomes para o HTML5
           cp bin/godot.javascript.opt.zip templates/webassembly_release.zip
           cp bin/godot.javascript.opt.debug.zip templates/webassembly_debug.zip
-          
-          # 3. Cria o arquivo version.txt (Essencial para o editor aceitar)
-          # Você pode alterar o "3.7.dev" para a versão exata que você está usando
           echo "3.7.dev" > templates/version.txt
-          
-          # 4. Zipa a pasta inteira e salva com a extensão .tpz
           zip -r html5_templates.tpz templates/
 
       - name: Upload do Template TPZ
