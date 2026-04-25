@@ -19,31 +19,33 @@ jobs:
 
       - name: Instalar VitaSDK
         env:
-          # Injeta o token oficial do GitHub Actions para não sofrer Rate Limit
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Consultando a API do GitHub com autenticação..."
-          
-          # Busca todos os releases e extrai a primeira URL do SDK compilado para Linux
           DOWNLOAD_URL=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             https://api.github.com/repos/vitasdk/autobuilds/releases | \
             grep "browser_download_url" | grep "vitasdk-x86_64-linux" | \
             head -n 1 | cut -d '"' -f 4)
-          
-          if [ -z "$DOWNLOAD_URL" ]; then
-             echo "Erro: Não foi possível obter a URL do VitaSDK."
-             exit 1
-          fi
-          
-          echo "Iniciando download do SDK em: $DOWNLOAD_URL"
+            
           wget -O vitasdk.tar.bz2 "$DOWNLOAD_URL"
-          
-          echo "Extraindo SDK..."
           sudo tar -xjvf vitasdk.tar.bz2 -C /usr/local
           
-          # Configura as variáveis de ambiente permanentemente para as próximas etapas
           echo "VITASDK=/usr/local/vitasdk" >> $GITHUB_ENV
           echo "/usr/local/vitasdk/bin" >> $GITHUB_PATH
+
+      - name: Instalar PVR_PSP2 (Dependências Gráficas do Vita)
+        run: |
+          echo "Clonando repositório para obter os Headers EGL/GLES..."
+          git clone https://github.com/GrapheneCt/PVR_PSP2.git /tmp/PVR_PSP2
+          sudo cp -r /tmp/PVR_PSP2/include/* $VITASDK/arm-vita-eabi/include/
+          
+          echo "Baixando arquivos de bibliotecas dinâmicas (.a)..."
+          # Usa um link direto para a última versão oficial sem consumir API
+          wget -O vitasdk_stubs.zip "https://github.com/GrapheneCt/PVR_PSP2/releases/latest/download/vitasdk_stubs.zip"
+          unzip vitasdk_stubs.zip -d /tmp/pvr_stubs
+          
+          echo "Instalando stubs no SDK..."
+          # Busca todos os arquivos .a extraídos e copia pro VitaSDK
+          find /tmp/pvr_stubs -name "*.a" -exec sudo cp {} $VITASDK/arm-vita-eabi/lib/ \;
 
       - name: Compilar Template Vita (Release)
         run: |
